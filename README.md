@@ -19,8 +19,11 @@ Clicking a notification brings you straight back to the harness. No more tab-wat
 
 #### Install
 
+Each plugin lives in its own folder under [`plugins/`](plugins/):
+
 ```sh
-dsh plugin --profile web add github:claudejaune/dsh-notaplugin
+# desktop notifications (this package lives in plugins/desktop-notifications)
+dsh plugin --profile web add "github:claudejaune/dsh-notaplugin#path:/plugins/desktop-notifications"
 ```
 
 Then restart `dsh` and open the web GUI. You'll see the bell in the session header.

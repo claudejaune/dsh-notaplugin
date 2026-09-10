@@ -6,7 +6,9 @@ settings:
 
 importers:
 
-  .:
+  .: {}
+
+  plugins/desktop-notifications:
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: ^4.0.2
