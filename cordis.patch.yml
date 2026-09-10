@@ -1,0 +1,17 @@
+# @claudejaune/dsh-client-ui-desktop-notifications — profile-layer patch.
+#
+# This package is installable via `dsh plugin --profile <name> add <package>`:
+# the package.json `dsh.bundle.patch` marker makes the profile loader treat it
+# as a layer, and this patch inserts the browser roster row that names the
+# package itself. The row is a `dsh.client` row (the package declares
+# `dsh.client` + `exports["./client"]`), so the client-modules node half scans
+# it into `window.__DSH_BOOT__` and serves the built browser half at
+# `/plugins/<id>/client.js`.
+#
+# Applied after the profile's own bundles (e.g. dsh-web-app), so the browser
+# slots this plugin registers into (`conversation.session.header.utilities`,
+# `shell.overlay`) are declared by the time it mounts.
+
+- insert:
+    - id: ui-desktop-notifications
+      name: '@claudejaune/dsh-client-ui-desktop-notifications'
