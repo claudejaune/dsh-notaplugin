@@ -56,13 +56,15 @@ Restart `dsh`. Details, known limits, and a stock-harness verification walkthrou
 
 ## Publishing
 
-Both plugins are publish-ready for npm. See [`PUBLISHING.md`](PUBLISHING.md) for the exact command sequence, scope and 2FA prerequisites, and how to inspect a tarball before it ships.
+Both plugins are publish-ready for npm under the `@claudejaune` scope.
 
 ```sh
 pnpm login --scope @claudejaune   # once
-pnpm run publish:dry              # inspect
+pnpm run publish:dry              # inspect tarballs before shipping
 pnpm run publish                  # publish both plugins
 ```
+
+Standard npm 2FA and version-bump rules apply (npm ≥10's built-in guidance covers the rest).
 
 ## Coming soon
 
