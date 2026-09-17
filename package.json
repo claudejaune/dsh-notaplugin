@@ -5,6 +5,8 @@
   "description": "A collection of small, installable plugins for the DeepSeek Harness (dsh) web GUI.",
   "scripts": {
     "build": "pnpm -r --if-present run build",
-    "typecheck": "pnpm -r --if-present run typecheck"
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "publish:dry": "pnpm -r publish --dry-run",
+    "publish": "pnpm -r publish"
   }
 }

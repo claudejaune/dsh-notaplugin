@@ -10,7 +10,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/claudejaune/dsh-notaplugin.git"
+    "url": "git+https://github.com/claudejaune/dsh-notaplugin.git",
+    "directory": "plugins/desktop-notifications"
   },
   "license": "MIT",
   "exports": {
@@ -29,7 +30,8 @@
     "lib/index.js",
     "lib/client.js",
     "lib/types/**/*.d.ts",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json --emitDeclarationOnly && tsdown",

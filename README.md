@@ -54,6 +54,16 @@ dsh plugin --profile web add "file:$(pwd)/plugins/ocode-go"
 
 Restart `dsh`. Details, known limits, and a stock-harness verification walkthrough live in [`plugins/ocode-go/README.md`](plugins/ocode-go/README.md).
 
+## Publishing
+
+Both plugins are publish-ready for npm. See [`PUBLISHING.md`](PUBLISHING.md) for the exact command sequence, scope and 2FA prerequisites, and how to inspect a tarball before it ships.
+
+```sh
+pnpm login --scope @claudejaune   # once
+pnpm run publish:dry              # inspect
+pnpm run publish                  # publish both plugins
+```
+
 ## Coming soon
 
 More plugins are on the way — this repo will grow as new ones land. Watch this space.
