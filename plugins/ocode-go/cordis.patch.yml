@@ -1,0 +1,17 @@
+# @claudejaune/dsh-ocode-go — profile-layer patch.
+#
+# This package is installable via `dsh plugin --profile <name> add <package>`:
+# the package.json `dsh.bundle.patch` marker makes the profile loader treat it
+# as a layer, and this patch inserts the host roster row that names the package.
+#
+# Unlike the client-half plugins in this repo, this row is a plain host plugin:
+# the feature lives entirely in the Node process, wrapping the transport the
+# model adapter already uses. There is no `dsh.client` row and nothing to serve
+# to the browser.
+#
+# Applied after the profile's own bundles (e.g. dsh-web-app), so the `agents`
+# service this plugin depends on is already provided by the time it mounts.
+
+- insert:
+    - id: ocode-go
+      name: '@claudejaune/dsh-ocode-go'

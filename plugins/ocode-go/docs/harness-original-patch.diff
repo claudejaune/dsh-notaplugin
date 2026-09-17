@@ -1,0 +1,194 @@
+diff --git a/packages/llm/llm-pi-ai/README.i18n.yaml b/packages/llm/llm-pi-ai/README.i18n.yaml
+index 988a7298f0..3383f0b841 100644
+--- a/packages/llm/llm-pi-ai/README.i18n.yaml
++++ b/packages/llm/llm-pi-ai/README.i18n.yaml
+@@ -2,5 +2,5 @@
+ # side as of the last confirmed-consistent state. Both languages carry equal authority;
+ # after editing either side, bring the other along and re-record with:
+ #   pnpm run verify-translation-pairing --write packages/llm/llm-pi-ai/README.md
+-README.md: a49281b5ddc63c1fe4ce628857ff6f267dc498cd
+-README.zh.md: 78aed7db98e217691351f49f3f8ee41e74177e17
++README.md: 7d6a57b4cc185cfa1914802a01d9b82eb022848f
++README.zh.md: 951afb0a5c26a946c8f2aceb49de68e2ffcd6d41
+diff --git a/packages/llm/llm-pi-ai/README.md b/packages/llm/llm-pi-ai/README.md
+index a49281b5dd..7d6a57b4cc 100644
+--- a/packages/llm/llm-pi-ai/README.md
++++ b/packages/llm/llm-pi-ai/README.md
+@@ -86,6 +86,8 @@ Each profile may set a `retryPolicy`; omission uses normal mode with five retrie
+ | `maxRequestImageBytes` | `20 MiB` | Aggregate base64 image-payload bound; a request whose retained images exceed it fails with `IMAGE_OFFLOAD_REQUIRED` |
+ | `retryPolicy` | normal, 5 retries | Provider-owned retry policy executed by `dsh-llm-retry` |
+ 
++Requests to an OpenCode gateway — the `opencode` and `opencode-go` catalog routes, or any route whose resolved endpoint host is `opencode.ai` — automatically carry `x-opencode-session` set to the request's conversation id. The gateway requires this stable per-conversation value for routing and prompt-cache affinity; a same-named entry in `headers` is replaced, because a fixed value cannot identify a conversation. Other routes are unaffected.
++
+ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-llm-pi-ai) is the exhaustive source for every accepted field and its JSDoc.
+ 
+ ### Sign in to a provider
+diff --git a/packages/llm/llm-pi-ai/README.zh.md b/packages/llm/llm-pi-ai/README.zh.md
+index 78aed7db98..951afb0a5c 100644
+--- a/packages/llm/llm-pi-ai/README.zh.md
++++ b/packages/llm/llm-pi-ai/README.zh.md
+@@ -86,6 +86,8 @@ kind: "package-reference"
+ | `maxRequestImageBytes` | `20 MiB` | base64 图片载荷总上限，保留图片超过时请求以 `IMAGE_OFFLOAD_REQUIRED` 失败 |
+ | `retryPolicy` | normal，5 次重试 | 由 `dsh-llm-retry` 执行的提供方自有重试策略 |
+ 
++发往 OpenCode 网关的请求——`opencode` 与 `opencode-go` 目录路由，或任何解析后的端点主机为 `opencode.ai` 的路由——会自动携带 `x-opencode-session`，其值为该请求的会话 id。网关要求这一稳定的按会话取值以进行路由与提示缓存亲和；`headers` 中的同名条目会被替换，因为固定值无法标识会话。其他路由不受影响。
++
+ 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-llm-pi-ai)是每个受支持字段及其 JSDoc 的穷尽式真源。
+ 
+ ### 登录提供方
+diff --git a/packages/llm/llm-pi-ai/src/adapter.ts b/packages/llm/llm-pi-ai/src/adapter.ts
+index 8dba978c31..f6aa00313f 100644
+--- a/packages/llm/llm-pi-ai/src/adapter.ts
++++ b/packages/llm/llm-pi-ai/src/adapter.ts
+@@ -201,12 +201,47 @@ function reasoningInfo(
+   }
+ }
+ 
+-/** Merge deployment headers while removing case-insensitive attribution collisions. */
+-function requestHeaders(headers: Readonly<Record<string, string>> | undefined): Record<string, string> {
++/** The managed-inference gateway whose inference endpoints require a per-conversation session id. */
++const OPENCODE_HOST = 'opencode.ai'
++
++/**
++ * Whether one route targets an OpenCode gateway, whose inference endpoints
++ * require the `x-opencode-session` header. The route key covers the installed
++ * `opencode` and `opencode-go` catalog routes; the resolved endpoint host also
++ * covers a hand-declared route pointed at the same gateway under another key.
++ * @param provider - the resolved route key.
++ * @param baseUrl - the resolved model endpoint.
++ * @returns whether requests to this route carry the OpenCode session header.
++ */
++export function isOpenCodeRoute(provider: string, baseUrl: string): boolean {
++  if (provider === 'opencode' || provider.startsWith('opencode-')) return true
++  try {
++    const host = new URL(baseUrl).hostname
++    return host === OPENCODE_HOST || host.endsWith(`.${OPENCODE_HOST}`)
++  } catch {
++    // A non-absolute endpoint cannot name the gateway; the route key already decided.
++    return false
++  }
++}
++
++/**
++ * Merge deployment headers, a provider-contract session header, and Harness
++ * attribution, in increasing precedence. A per-conversation session header
++ * replaces a same-named static profile entry because a fixed value cannot do
++ * that job; attribution names are Harness-owned and win every collision.
++ * @param headers - profile-configured request headers.
++ * @param sessionHeader - the per-conversation header, when the route requires one.
++ * @returns the merged header record for one provider request.
++ */
++function requestHeaders(
++  headers: Readonly<Record<string, string>> | undefined,
++  sessionHeader: Readonly<Record<string, string>> | undefined,
++): Record<string, string> {
+   const attribution = attributionHeaders()
+   const reserved = new Set(Object.keys(attribution).map(name => name.toLowerCase()))
+   return {
+     ...Object.fromEntries(Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLowerCase()))),
++    ...sessionHeader,
+     ...attribution,
+   }
+ }
+@@ -377,6 +412,11 @@ export class PiAiAdapter extends LlmAdapter {
+             maxBytes: profile.requestImageMaxBytes,
+           },
+         }, onReplayDegrade)
++      // The OpenCode gateway requires a stable per-conversation id on every
++      // inference request; pi-ai's own affinity formats do not emit this header.
++      const openCodeSession = options.sessionId !== undefined && isOpenCodeRoute(model.provider, model.baseUrl)
++        ? { 'x-opencode-session': String(options.sessionId) }
++        : undefined
+       const events = snapshot.models.streamSimple(model, context, {
+         ...profileOptions(profile, reasoning, apiKey),
+         ...options.temperature === undefined ? {} : { temperature: options.temperature },
+@@ -385,7 +425,7 @@ export class PiAiAdapter extends LlmAdapter {
+         signal: watchdog.signal,
+         // Profile headers are deployment-owned; attribution names are
+         // Harness-owned and therefore win collisions.
+-        headers: requestHeaders(profile.headers),
++        headers: requestHeaders(profile.headers, openCodeSession),
+       })
+       const iterator = toStreamChunks(events, model.contextWindow, options.signal, model.id)[Symbol.asyncIterator]()
+       let exhausted = false
+diff --git a/packages/llm/llm-pi-ai/tests/adapter.spec.ts b/packages/llm/llm-pi-ai/tests/adapter.spec.ts
+index a247b20e42..01c547541d 100644
+--- a/packages/llm/llm-pi-ai/tests/adapter.spec.ts
++++ b/packages/llm/llm-pi-ai/tests/adapter.spec.ts
+@@ -14,6 +14,7 @@ import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
+ import { PiAiAdapter } from '@deepseek-ai/dsh-llm-pi-ai'
+ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+ import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
++import { isOpenCodeRoute } from '../src/adapter.ts'
+ import { DEFAULT_MAX_REQUEST_IMAGE_BYTES, resolveProfiles } from '../src/config.ts'
+ import { memoryAuth } from './auth-double.ts'
+ import { assemble } from './assemble.ts'
+@@ -54,6 +55,21 @@ async function harness(baseURL: string, overrides: Record<string, unknown> = {})
+   return ctx
+ }
+ 
++/** The same mount under an arbitrary route key, for route-specific behavior. */
++async function harnessFor(
++  provider: string,
++  baseURL: string,
++  overrides: Record<string, unknown> = {},
++): Promise<Context> {
++  vi.stubEnv('PI_TEST_KEY', 'test-key')
++  const ctx = new Context()
++  await ctx.plugin(LlmRuntime)
++  await ctx.plugin(LlmPiAi, {
++    providers: { [provider]: { apiKeyEnv: 'PI_TEST_KEY', baseURL, ...overrides } },
++  })
++  return ctx
++}
++
+ /** Direct adapter over the real profile resolver, with a fixed key per call. */
+ function adapterOf(
+   providers: Record<string, LlmPiAi.PiAiProviderProfile>,
+@@ -123,6 +139,46 @@ describe('PiAiAdapter provider routing', () => {
+     expect(server.headers[0]?.['user-agent']).toBe(userAgent())
+   })
+ 
++  it('stamps the conversation id as x-opencode-session on OpenCode routes', async () => {
++    const server = await mockServer([{ events: textEvents }])
++    const ctx = await harnessFor('opencode-go', server.url)
++    await assemble(ctx, {
++      provider: 'opencode-go',
++      model: 'deepseek-v4-flash',
++      messages: [],
++      sessionId: 'session-for-pi' as never,
++    })
++    expect(server.headers[0]?.['x-opencode-session']).toBe('session-for-pi')
++  })
++
++  it('leaves x-opencode-session off routes outside the OpenCode gateway', async () => {
++    const server = await mockServer([{ events: textEvents }])
++    const ctx = await harness(server.url)
++    await assemble(ctx, { model: 'deepseek-v4-flash', messages: [], sessionId: 'session-for-pi' as never })
++    expect(server.headers[0]?.['x-opencode-session']).toBeUndefined()
++  })
++
++  it('replaces a static x-opencode-session profile header with the conversation id', async () => {
++    const server = await mockServer([{ events: textEvents }])
++    const ctx = await harnessFor('opencode-go', server.url, { headers: { 'x-opencode-session': 'static' } })
++    await assemble(ctx, {
++      provider: 'opencode-go',
++      model: 'deepseek-v4-flash',
++      messages: [],
++      sessionId: 'session-for-pi' as never,
++    })
++    expect(server.headers[0]?.['x-opencode-session']).toBe('session-for-pi')
++  })
++
++  it('recognizes OpenCode routes by key and by endpoint host', () => {
++    expect(isOpenCodeRoute('opencode', 'https://opencode.ai/zen/v1')).toBe(true)
++    expect(isOpenCodeRoute('opencode-go', 'https://opencode.ai/zen/go/v1')).toBe(true)
++    expect(isOpenCodeRoute('my-go-route', 'https://opencode.ai/zen/go/v1')).toBe(true)
++    expect(isOpenCodeRoute('my-go-route', 'https://edge.opencode.ai/zen/go/v1')).toBe(true)
++    expect(isOpenCodeRoute('openai', 'https://api.openai.com/v1')).toBe(false)
++    expect(isOpenCodeRoute('my-route', 'not-an-absolute-url')).toBe(false)
++  })
++
+   it('forwards common stream options and profile reasoning', async () => {
+     const server = await mockServer([{ events: textEvents }])
+     const ctx = await harness(server.url, {
