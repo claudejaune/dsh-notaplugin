@@ -1,4 +1,4 @@
-# @claudejaune/dsh-client-ui-desktop-notifications — profile-layer patch.
+# @claudejaune/dsh-desktop-notif — profile-layer patch.
 #
 # This package is installable via `dsh plugin --profile <name> add <package>`:
 # the package.json `dsh.bundle.patch` marker makes the profile loader treat it
@@ -14,4 +14,4 @@
 
 - insert:
     - id: ui-desktop-notifications
-      name: '@claudejaune/dsh-client-ui-desktop-notifications'
+      name: '@claudejaune/dsh-desktop-notif'

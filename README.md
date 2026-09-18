@@ -20,7 +20,7 @@ Clicking a notification brings you straight back to the harness. No more tab-wat
 #### Install
 
 ```sh
-dsh plugin --profile web add "@claudejaune/dsh-client-ui-desktop-notifications"
+dsh plugin --profile web add "@claudejaune/dsh-desktop-notif"
 ```
 
 Or from this repo's source (see the git-install note below):
