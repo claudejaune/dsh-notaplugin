@@ -19,16 +19,19 @@ Clicking a notification brings you straight back to the harness. No more tab-wat
 
 #### Install
 
-Each plugin lives in its own folder under [`plugins/`](plugins/):
+```sh
+dsh plugin --profile web add "@claudejaune/dsh-client-ui-desktop-notifications"
+```
+
+Or from this repo's source (see the git-install note below):
 
 ```sh
-# desktop notifications (this package lives in plugins/desktop-notifications)
 dsh plugin --profile web add "github:claudejaune/dsh-notaplugin#path:/plugins/desktop-notifications"
 ```
 
 Then restart `dsh` and open the web GUI. You'll see the bell in the session header.
 
-> **Note for git installs:** pnpm ≥10 blocks build scripts of GitHub-installed packages by default. The *first* install attempt will fail and print an `allowBuilds` key — paste it into the profile's `pnpm-workspace.yaml` as it tells you, then run the same command again. One-time, copy-paste.
+> **Note for git installs:** pnpm ≥10 blocks build scripts of GitHub-installed packages by default. The *first* install attempt will fail and print an `allowBuilds` key — paste it into the profile's `pnpm-workspace.yaml` as it tells you, then run the same command again. One-time, copy-paste. The npm install above needs no such step — packages published to a registry ship prebuilt code.
 
 ### 🟢 OpenCode Go
 
