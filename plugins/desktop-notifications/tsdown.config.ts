@@ -1,5 +1,5 @@
 /**
- * Standalone build for @claudejaune/dsh-client-ui-desktop-notifications.
+ * Standalone build for @claudejaune/dsh-desktop-notif.
  *
  * Two artifacts, mirroring the contracts the harness's client-modules node
  * half serves:
@@ -18,7 +18,7 @@
  */
 import { defineConfig } from 'tsdown'
 
-const ID = '@claudejaune/dsh-client-ui-desktop-notifications'
+const ID = '@claudejaune/dsh-desktop-notif'
 
 export default defineConfig([
   // ── node half: lib/index.js ────────────────────────────────────────────

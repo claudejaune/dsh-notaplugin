@@ -1,6 +1,7 @@
 /**
  * Desktop notification side-effect component. Subscribes to the session list
- * and the pending-interaction map and fires browser Notification messages when:
+ * (for titles) and the unified Session-status snapshot and fires browser
+ * Notification messages when:
  *   1. A session completes while the tab is hidden ("Done" reminder).
  *   2. A pending interaction (approval / plan-review / question) arrives.
  *
@@ -9,6 +10,11 @@
  * root-scoped `shell.overlay` slot (always mounted, click-through, additive),
  * so it observes every session — the functional equivalent of the reference
  * implementation's app-root mount.
+ *
+ * Lifecycle facts (running, pending interaction) come from `useSessionStatus`,
+ * the harness's single source of truth since pending interactions moved out of
+ * the session list. The older `useSessionPendingInteraction` prop no longer
+ * exists; reading it left the host throwing on render and inactive.
  */
 import * as React from 'react'
 import { notificationsEnabled } from './notification-preference.ts'
@@ -20,9 +26,16 @@ interface SessionListStateLike {
   byId: Record<string, { displayTitle: string; running: boolean }>
 }
 
-/** The pending-interaction map as this component reads it. */
-interface PendingInteractionsLike {
-  get(id: string): { kind: string } | undefined
+/** One session's lifecycle facts, as read from the unified status snapshot. */
+interface SessionStatusLike {
+  running: boolean | undefined
+  pendingInteraction: { kind: string } | undefined
+  completionUnread: boolean
+}
+
+/** The unified session-status snapshot (session id -> status) as this component reads it. */
+interface SessionStatusMapLike {
+  get(id: string): SessionStatusLike | undefined
 }
 
 /** Framework standard props this component consumes. */
@@ -31,17 +44,17 @@ interface DesktopNotificationsProps {
     selector: (state: SessionListStateLike) => T,
     equal?: (left: T, right: T) => boolean,
   ) => T
-  useSessionPendingInteraction: <T>(selector: (map: PendingInteractionsLike) => T) => T
+  /** Unified lifecycle hook: running, pending interaction, and completion reminder. */
+  useSessionStatus: <T>(selector: (map: SessionStatusMapLike) => T) => T
   /** Synthesized translate seat over the `desktop-notifications` namespace. */
   t: (key: NotificationKey) => string
 }
 
-/** Per-session facts used to detect transitions. */
+/** Per-session display facts read from the session list. */
 interface SurfaceEntry {
   id: string
   /** Body text for the fired notification. */
   title: string
-  running: boolean
 }
 
 /**
@@ -87,28 +100,29 @@ function useNotificationPermission(): void {
 }
 
 /**
- * Project the per-session running surface. The custom equality compares only
- * id + running, so React re-renders only on a relevant transition — not on
- * every streaming-token store tick. Pure: no side effects.
+ * Project the per-session display surface. The custom equality compares only
+ * id + title, so React re-renders only when a session appears, disappears, or
+ * is renamed — not on every streaming-token store tick. Lifecycle facts come
+ * from `useSessionStatus`, not the list. Pure: no side effects.
  */
 function selectSurface(state: SessionListStateLike): SurfaceEntry[] {
   const entries: SurfaceEntry[] = []
   for (const id of state.ids) {
     const entry = state.byId[id]
     if (entry === undefined) continue
-    entries.push({ id, title: entry.displayTitle, running: entry.running })
+    entries.push({ id, title: entry.displayTitle })
   }
   return entries
 }
 
-/** Surface equality on id + running only (re-render only on a real transition). */
+/** Surface equality on id + title only (re-render only on a real membership/rename). */
 function sameSurface(a: SurfaceEntry[], b: SurfaceEntry[]): boolean {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i++) {
     const left = a[i]
     const right = b[i]
     if (left === undefined || right === undefined) return false
-    if (left.id !== right.id || left.running !== right.running) return false
+    if (left.id !== right.id || left.title !== right.title) return false
   }
   return true
 }
@@ -130,39 +144,37 @@ function pendingKey(kind: string): NotificationKey {
  * @returns no rendered content.
  */
 export function DesktopNotifications(props: DesktopNotificationsProps): null {
-  const { useSessions, useSessionPendingInteraction, t } = props
+  const { useSessions, useSessionStatus, t } = props
 
   useNotificationPermission()
 
+  // Titles come from the session list; lifecycle facts come from the unified
+  // status snapshot.
   const surface = useSessions(selectSurface, sameSurface)
-  // The published map replaces its identity only when an interaction arrives
-  // or clears, so the snapshot selector needs no custom equality.
-  const pending = useSessionPendingInteraction(map => map)
+  // The status snapshot replaces its identity only when some session's running,
+  // pending-interaction, or completion-reminder fact changes, so the selector
+  // needs no custom equality.
+  const statuses = useSessionStatus(map => map)
 
-  const prevSurfaceRef = React.useRef(surface)
-  const prevPendingRef = React.useRef(pending)
+  const prevStatusesRef = React.useRef(statuses)
   React.useEffect(() => {
-    const prevById = new Map<string, SurfaceEntry>(
-      prevSurfaceRef.current.map(entry => [entry.id, entry]),
-    )
-    const prevPending = prevPendingRef.current
+    const prevStatuses = prevStatusesRef.current
     for (const entry of surface) {
-      const was = prevById.get(entry.id)
-      const nowPending = pending.get(entry.id)
-      if (nowPending !== undefined && prevPending.get(entry.id) === undefined) {
+      const status = statuses.get(entry.id)
+      const prev = prevStatuses.get(entry.id)
+      const nowPending = status?.pendingInteraction
+      if (nowPending !== undefined && prev?.pendingInteraction === undefined) {
         notify(t(pendingKey(nowPending.kind)), entry.title)
       }
       // "Done": a session stopped working and is not now waiting on an
       // interaction (that case is covered by the pending notification above).
-      // Keys off the busy→idle edge of `running`; `completed` only arms for
-      // non-selected sessions and never fires for the watched one.
-      if (was?.running === true && !entry.running && nowPending === undefined) {
+      // Keys off the busy→idle edge of the unified `running` fact.
+      if (prev?.running === true && status?.running !== true && nowPending === undefined) {
         notify(t('notify.done'), entry.title)
       }
     }
-    prevSurfaceRef.current = surface
-    prevPendingRef.current = pending
-  }, [surface, pending, t])
+    prevStatusesRef.current = statuses
+  }, [surface, statuses, t])
 
   return null
 }
