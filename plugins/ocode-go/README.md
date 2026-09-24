@@ -72,6 +72,53 @@ Three properties worth knowing:
   there pins one id across all conversations, which costs you the gateway's
   routing and prompt-cache affinity.
 
+## Missing models? That is not this plugin
+
+A model the gateway serves but the harness's picker does not list is a **catalog
+staleness** problem, and it lives in `@deepseek-ai/dsh-llm-pi-ai`, not here. This
+plugin only stamps the session header; it never touches which models a route
+serves.
+
+The reason, in one paragraph: a route's served models are the installed pi-ai
+catalog for that route key, *overridden* by the profile's own `models` list
+(`resolveRouteModels()` in `llm-pi-ai`). Those two are the only sources. A
+third-party plugin has no hook that adds a model to a route owned by another
+adapter plugin, and "Fetch available models" on the Models page answers a
+*catalog* route from the bundled snapshot rather than from the endpoint — so a
+model newer than the installed pi-ai release cannot appear, even though
+`GET https://opencode.ai/zen/go/v1/models` returns it.
+
+Two things a user can do today:
+
+- **Hand-declare it.** Add the id to the route's `models` list. If the installed
+  catalog does not describe that id, the entry needs the route to state `api`
+  and `baseURL` too. Put those models on their **own route** instead of appending
+  to a catalog route: a route-level `api` wins over every catalog model's own
+  protocol, so appending it to `opencode-go` silently moves `qwen3.8-flash` and
+  `minimax-m3` from `anthropic-messages` to `/chat/completions`.
+
+  ```yaml
+  llm-pi-ai:
+    providers:
+      opencode-go: { …leave as is… }
+      opencode-go-new:
+        displayName: OpenCode Go · New
+        apiKeyEnv: OPENCODE_GO_API_KEY
+        api: openai-completions
+        baseURL: https://opencode.ai/zen/go/v1
+        models:
+          - id: deepseek-v4.1-flash
+            name: DeepSeek V4.1 Flash
+            contextWindow: 1000000
+            maxTokens: 384000
+            input: [text, image]
+            reasoningEfforts: { off: null, low: low, high: high, max: max }
+  ```
+
+- **Or fix the cause upstream.** Bump `@earendil-works/pi-ai` to a release whose
+  catalog carries the id, or make catalog-route discovery probe the endpoint
+  instead of short-circuiting to the snapshot. Both are `llm-pi-ai` changes.
+
 ## Why a fetch wrapper rather than a harness change
 
 The header belongs to a request assembled deep inside the provider adapter. A
