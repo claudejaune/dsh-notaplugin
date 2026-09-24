@@ -1,7 +1,7 @@
 {
   "name": "@claudejaune/dsh-desktop-notif",
   "description": "Browser desktop notifications for DeepSeek Harness web: hidden-tab toasts when a session finishes or asks for an interaction, with a session-header bell toggle persisted in localStorage.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

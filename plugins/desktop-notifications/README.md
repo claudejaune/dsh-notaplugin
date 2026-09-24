@@ -36,6 +36,19 @@ dsh plugin --profile web add "github:claudejaune/dsh-notaplugin#path:/plugins/de
 - **Session needs you** — one notification per newly pending approval, plan
   review, or question, titled by kind.
 
+### What the notification says
+
+The headline is the content you need to judge it by, clipped to 20 characters:
+
+- finished session — the final assistant response of that turn
+  (`pong`, `Which color do you p…`)
+- question / plan review — the question text
+- approval — the asker's reason, or the tool awaiting the decision
+- anything without text to show — the session title
+
+The session title follows in the body (`Done · Fix the flaky test`) so several
+running sessions stay distinguishable.
+
 Two conditions keep it quiet:
 
 - **Only while the tab is hidden.** A visible tab already shows the change, so
@@ -75,9 +88,15 @@ The package has a host half and a browser half, both from one source tree.
   `desktop-notifications` namespace.
 - Lifecycle facts come from the harness's unified status snapshot
   (`useSessionStatus`), which carries `running` and `pendingInteraction` per
-  session; titles come from the session list. The side-effect host re-renders
-  only when a session's id or title changes, or a status fact flips — not on
-  every streaming-token tick.
+  session. Question and approval text rides on the interaction value itself.
+- The finished-session preview comes from the harness's client-visible
+  `turnOutline` projection, read off each session-list row — so it is available
+  for sessions this tab never opened, with no retention and no history opening.
+  That projection commits a turn's response on `turn/end`, a few milliseconds
+  after `running` flips false, so the completion notification reads the row once
+  more after a short settle window rather than racing the commit.
+- The side-effect host re-renders only when a session's id, title, or turn
+  preview changes, or a status fact flips — not on every streaming-token tick.
 
 ## Development
 
